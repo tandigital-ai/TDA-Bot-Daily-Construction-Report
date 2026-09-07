@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chuẩn hóa Kế hoạch Thi công - AI Powered</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- SheetJS with styles support -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+  <!-- React 18 + Babel -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <style>
+    * { font-family: 'Inter', system-ui, sans-serif; }
+    code, pre, .font-mono { font-family: 'JetBrains Mono', monospace !important; }
+    body { background: #f1f5f9; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    /* Dark scrollbars in sidebar & logs */
+    .dark-scroll::-webkit-scrollbar-thumb { background: #475569; }
+    .dark-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Config / providers / prompt / keystore / AI client / exporter -->
+  <script src="js/i18n.js"></script>
+  <script src="js/providers.js"></script>
+  <script src="js/prompt.js"></script>
+  <script src="js/keystore.js"></script>
+  <script src="js/ai_client.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/sample_data.js"></script>
+
+  <!-- React components -->
+  <script type="text/babel" src="js/components/Sidebar.jsx"></script>
+  <script type="text/babel" src="js/components/InputTab.jsx"></script>
+  <script type="text/babel" src="js/components/ResultTab.jsx"></script>
+  <script type="text/babel" src="js/components/ProvidersTab.jsx"></script>
+  <script type="text/babel" src="js/components/PromptTab.jsx"></script>
+  <script type="text/babel" src="js/components/StatsTab.jsx"></script>
+  <script type="text/babel" src="js/components/HelpTab.jsx"></script>
+
+  <!-- Main app -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    function App() {
+      const [cfg, setCfg] = useState(() => window.KeyStore.loadConfig());
+      const [activeTab, setActiveTab] = useState(() => localStorage.getItem("kh_tc_v1_tab") || "input");
+      const [lang, setLang] = useState(() => cfg.lang || "vi");
+      const [rows, setRows] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("kh_tc_v1_rows") || "[]"); } catch { return []; }
+      });
+
+      useEffect(() => { localStorage.setItem("kh_tc_v1_tab", activeTab); }, [activeTab]);
+      useEffect(() => {
+        localStorage.setItem("kh_tc_v1_rows", JSON.stringify(rows));
+      }, [rows]);
+      useEffect(() => {
+        const c = { ...cfg, lang };
+        window.KeyStore.saveConfig(c);
+      }, [lang]);
+
+      // First-run: seed một sample provider entry cho user (Gemini) không có key
+      useEffect(() => {
+        // no-op — user tự add
+      }, []);
+
+      const t = useMemo(() => {
+        return (key) => window.I18N_DICT[lang]?.[key] || window.I18N_DICT.vi[key] || key;
+      }, [lang]);
+
+      const handleNormalized = (newRows) => {
+        if (rows.length > 0) {
+          const choice = confirm(
+            `Đã có ${rows.length} dòng cũ.\n\n[OK] = Nối thêm ${newRows.length} dòng mới vào cuối (tổng ${rows.length + newRows.length}).\n[Cancel] = Thay thế toàn bộ bằng ${newRows.length} dòng mới.`
+          );
+          if (choice) {
+            setRows([...rows, ...newRows]);
+          } else {
+            setRows(newRows);
+          }
+        } else {
+          setRows(newRows);
+        }
+      };
+
+      const goto = (tab) => setActiveTab(tab);
+
+      return (
+        <div className="flex h-screen bg-slate-100 overflow-hidden">
+          <div className="dark-scroll"><window.Sidebar activeTab={activeTab} setActiveTab={setActiveTab} lang={lang} setLang={setLang} t={t} rowsCount={rows.length} /></div>
+          <main className="flex-1 overflow-y-auto bg-slate-50">
+            {activeTab === "input" && <window.InputTab cfg={cfg} setCfg={setCfg} t={t} onNormalized={handleNormalized} onGoto={goto} />}
+            {activeTab === "result" && <window.ResultTab rows={rows} setRows={setRows} t={t} />}
+            {activeTab === "stats" && <window.StatsTab rows={rows} t={t} />}
+            {activeTab === "providers" && <window.ProvidersTab cfg={cfg} setCfg={setCfg} t={t} />}
+            {activeTab === "prompt" && <window.PromptTab cfg={cfg} setCfg={setCfg} t={t} />}
+            {activeTab === "help" && <window.HelpTab t={t} />}
+          </main>
+        </div>
+      );
+    }
+
+    // Wait for all components to load
+    const rootEl = document.getElementById("root");
+    const tryMount = () => {
+      if (window.Sidebar && window.InputTab && window.ResultTab && window.ProvidersTab && window.PromptTab && window.StatsTab && window.HelpTab) {
+        ReactDOM.createRoot(rootEl).render(<App />);
+      } else {
+        setTimeout(tryMount, 50);
+      }
+    };
+    tryMount();
+  </script>
+</body>
+</html>
